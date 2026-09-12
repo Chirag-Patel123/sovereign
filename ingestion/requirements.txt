@@ -1,0 +1,4 @@
+pytesseract
+pillow
+sentence-transformers
+numpy
