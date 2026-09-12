@@ -32,6 +32,6 @@ class SearchResponse(BaseModel):
 # Healthcheck response
 class HealthResponse(BaseModel):
     status: str
-    ollama_connected: bool
+    groq_connected: bool
     mock_ingestion: bool
     service: str = "Sovereign Backend / Agent"

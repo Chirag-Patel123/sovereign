@@ -2,17 +2,30 @@ import React, { useState, useRef, useEffect } from 'react';
 import { sendQuery } from '../api/client';
 
 const STEP_REVEAL_DELAY_MS = 500;
+const BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000';
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// tool_trace items look like { tool: "search|calculate|write_file", input: {}, output: {} }
+// there's no human-readable "label" field from the backend, so build one here.
+function describeToolStep(step) {
+  switch (step.tool) {
+    case 'search':
+      return `Searching internal standards for "${step.input?.query ?? ''}"…`;
+    case 'calculate':
+      return 'Running calculation…';
+    case 'write_file':
+      return 'Drafting Word note…';
+    default:
+      return `Running ${step.tool}…`;
+  }
+}
+
 export default function ChatPanel({ documentId, onFileGenerated }) {
   const [messages, setMessages] = useState([
-    {
-      role: 'system',
-      text: 'Upload a document on the right, then ask a question about it.',
-    },
+    { role: 'system', text: 'Upload a document on the right, then ask a question about it.' },
   ]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
@@ -32,64 +45,58 @@ export default function ChatPanel({ documentId, onFileGenerated }) {
     setBusy(true);
 
     try {
-      const result = await sendQuery(trimmed, documentId ? { documentId } : {});
-      const steps = result?.steps || [];
+      const result = await sendQuery(trimmed, documentId ? { docId: documentId } : {});
+      const trace = result?.tool_trace || [];
 
-      // Reveal each agent step in sequence rather than dumping them all at once —
-      // this is what actually communicates "agent loop" to someone watching.
-      for (const step of steps) {
+      for (const step of trace) {
         await sleep(STEP_REVEAL_DELAY_MS);
-        setMessages((prev) => [...prev, { role: 'agent', text: step.label }]);
+        setMessages((prev) => [...prev, { role: 'agent', text: describeToolStep(step) }]);
       }
 
-      if (result?.generatedFile) {
-        onFileGenerated?.(result.generatedFile);
+      if (result?.answer) {
+        await sleep(STEP_REVEAL_DELAY_MS);
+        setMessages((prev) => [...prev, { role: 'agent', text: result.answer }]);
+      }
+
+      if (result?.file_url) {
+        const filename = result.file_url.split('/').pop();
+        onFileGenerated?.({
+          filename,
+          downloadUrl: `${result.file_url.startsWith('http') ? '' : BASE_URL}${result.file_url}`,
+        });
         await sleep(STEP_REVEAL_DELAY_MS);
         setMessages((prev) => [
           ...prev,
-          { role: 'agent', text: `Generated ${result.generatedFile.filename}. See the file panel →` },
+          { role: 'agent', text: `Generated ${filename}. See the file panel →` },
         ]);
       }
     } catch (err) {
-      setMessages((prev) => [
-        ...prev,
-        { role: 'error', text: `Request failed: ${err.message}` },
-      ]);
+      setMessages((prev) => [...prev, { role: 'error', text: `Request failed: ${err.message}` }]);
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="flex flex-col h-full border border-line rounded-sharp bg-panel">
-      <div className="border-b border-line px-4 py-2.5">
-        <span className="font-mono text-xs tracking-wide text-ink-muted">01 · AGENT CHAT</span>
-      </div>
+    <div className="panel">
+      <div className="panel-header">01 · AGENT CHAT</div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+      <div ref={scrollRef} className="chat-messages">
         {messages.map((m, i) => (
           <Bubble key={i} role={m.role} text={m.text} />
         ))}
-        {busy && (
-          <div className="font-mono text-xs text-ink-faint animate-fade-in-up">
-            agent is working<span className="animate-blink">…</span>
-          </div>
-        )}
+        {busy && <div className="chat-busy">agent is working…</div>}
       </div>
 
-      <form onSubmit={handleSubmit} className="border-t border-line p-3 flex gap-2">
+      <form onSubmit={handleSubmit} className="chat-form">
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Ask about the uploaded document…"
-          className="flex-1 bg-base border border-line rounded-sharp px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:outline-none focus:border-signal-dim"
+          className="chat-input"
           disabled={busy}
         />
-        <button
-          type="submit"
-          disabled={busy || !input.trim()}
-          className="px-4 py-2 rounded-sharp bg-signal text-base font-medium text-sm disabled:opacity-40 disabled:cursor-not-allowed hover:bg-signal/90 transition-colors"
-        >
+        <button type="submit" disabled={busy || !input.trim()} className="btn-primary">
           Send
         </button>
       </form>
@@ -98,35 +105,9 @@ export default function ChatPanel({ documentId, onFileGenerated }) {
 }
 
 function Bubble({ role, text }) {
-  if (role === 'user') {
-    return (
-      <div className="flex justify-end animate-fade-in-up">
-        <div className="max-w-[85%] bg-signal/10 border border-signal-dim/40 text-ink rounded-sharp px-3 py-2 text-sm">
-          {text}
-        </div>
-      </div>
-    );
-  }
-  if (role === 'error') {
-    return (
-      <div className="animate-fade-in-up">
-        <div className="max-w-[85%] border border-danger/50 text-danger rounded-sharp px-3 py-2 text-sm font-mono">
-          {text}
-        </div>
-      </div>
-    );
-  }
-  if (role === 'agent') {
-    return (
-      <div className="animate-fade-in-up">
-        <div className="max-w-[85%] border border-line2 text-ink-muted rounded-sharp px-3 py-2 text-sm font-mono">
-          {text}
-        </div>
-      </div>
-    );
-  }
-  // system
   return (
-    <div className="text-xs text-ink-faint font-mono px-1">{text}</div>
+    <div className={`bubble ${role} fade-in`}>
+      {text}
+    </div>
   );
 }

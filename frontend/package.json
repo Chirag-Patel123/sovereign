@@ -7,16 +7,10 @@
     "react-dom": "^18.2.0",
     "react-scripts": "5.0.1"
   },
-  "devDependencies": {
-    "@craco/craco": "^7.1.0",
-    "autoprefixer": "^10.4.19",
-    "postcss": "^8.4.38",
-    "tailwindcss": "^3.4.4"
-  },
   "scripts": {
-    "start": "craco start",
-    "build": "craco build",
-    "test": "craco test",
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
   "eslintConfig": {

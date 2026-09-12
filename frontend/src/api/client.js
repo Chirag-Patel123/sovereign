@@ -1,34 +1,34 @@
 // ---------------------------------------------------------------------------
 // Sovereign AI Workbench — API client
 //
-// This is the ONLY file that should need edits once Person 1 / Person 2
-// confirm the real FastAPI route names and payload shapes from their
-// `app/main.py` and `app/models.py`. Everything above this layer (the React
-// components) talks to the functions below, not to fetch() directly.
+// Confirmed against the real backend/app/main.py + models.py and the real
+// ingestion/app.py (as of Hour ~7). Two separate services:
+//   - Backend/Agent (Person 1): localhost:8000 — chat queries + file download
+//   - Ingestion (Person 2): localhost:8001 — document upload/OCR directly,
+//     NOT proxied through the backend.
 //
-// Expected (assumed) response shape for sendQuery():
+// Confirmed response shape for sendQuery() -> POST /agent/query:
 // {
-//   steps: [
-//     { label: "Searching internal standards...", status: "done" },
-//     { label: "Running calculation...", status: "done" },
-//     { label: "Drafting Word note...", status: "done" }
-//   ],
-//   generatedFile: { filename: "Approval_Note_Draft.docx", downloadUrl: "https://..." } | null
+//   answer: "string",
+//   tool_trace: [ { tool: "search|calculate|write_file", input: {}, output: {} } ],
+//   file_url: "string | null"
 // }
 //
-// TODO once confirmed with backend:
-// - Update ROUTES below to match app/main.py exactly.
-// - If the backend streams progress (SSE / chunked response) instead of
-//   returning one JSON blob, replace the body of sendQuery() with the
-//   EventSource/fetch-stream variant — see the commented alternative below.
+// Confirmed response shape for uploadDocument() -> POST /ingest (port 8001):
+// {
+//   doc_id: "string",
+//   status: "ready|processing|error",
+//   page_count: number
+// }
 // ---------------------------------------------------------------------------
 
 const BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000';
+const INGESTION_URL = process.env.REACT_APP_INGESTION_BASE_URL || 'http://localhost:8001';
 
 const ROUTES = {
-  chat: '/agent/query', // guess based on app/agent/ folder — confirm with Person 1
-  upload: '/documents/upload', // confirm with Person 2
-  file: (fileId) => `/files/${fileId}`,
+  chat: '/agent/query',       // backend, confirmed against app/main.py
+  upload: '/ingest',          // ingestion service, confirmed against ingestion/app.py — NOT the backend
+  file: (filename) => `/files/${filename}`, // backend, confirmed against app/main.py
 };
 
 async function handleResponse(res) {
@@ -40,39 +40,25 @@ async function handleResponse(res) {
 }
 
 /**
- * Sends a user query (optionally referencing an already-uploaded document)
- * to the agent backend and returns the agent's steps + any generated file.
+ * Sends a user query against an already-ingested document to the agent
+ * backend and returns its answer, tool trace, and any generated file URL.
  *
  * @param {string} message
- * @param {{ documentId?: string } } [context]
+ * @param {{ docId?: string }} [context]
  */
 export async function sendQuery(message, context = {}) {
   const res = await fetch(`${BASE_URL}${ROUTES.chat}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query: message, ...context }),
+    body: JSON.stringify({ query: message, doc_id: context.docId ?? '' }),
   });
   return handleResponse(res);
-
-  // --- Streaming alternative (uncomment if backend uses SSE) ---
-  // return new Promise((resolve, reject) => {
-  //   const steps = [];
-  //   const evtSource = new EventSource(`${BASE_URL}${ROUTES.chat}?query=${encodeURIComponent(message)}`);
-  //   evtSource.onmessage = (e) => {
-  //     const data = JSON.parse(e.data);
-  //     if (data.type === 'step') steps.push(data.step);
-  //     if (data.type === 'done') {
-  //       evtSource.close();
-  //       resolve({ steps, generatedFile: data.generatedFile || null });
-  //     }
-  //   };
-  //   evtSource.onerror = (err) => { evtSource.close(); reject(err); };
-  // });
 }
 
 /**
- * Uploads a document (image or PDF) to the backend for OCR/ingestion.
- * Returns an identifier the caller can pass back in sendQuery's context.
+ * Uploads a document (image or PDF) directly to the Ingestion service
+ * (port 8001) for OCR/chunking. Returns { doc_id, status, page_count }.
+ * The returned doc_id is what gets passed back into sendQuery's context.
  *
  * @param {File} file
  */
@@ -80,7 +66,7 @@ export async function uploadDocument(file) {
   const formData = new FormData();
   formData.append('file', file);
 
-  const res = await fetch(`${BASE_URL}${ROUTES.upload}`, {
+  const res = await fetch(`${INGESTION_URL}${ROUTES.upload}`, {
     method: 'POST',
     body: formData,
   });
@@ -88,12 +74,10 @@ export async function uploadDocument(file) {
 }
 
 /**
- * Resolves a generated file's direct download URL, if the backend returns
- * an ID rather than a full URL from sendQuery().
+ * Resolves a generated file's direct download URL on the backend.
  *
- * @param {string} fileId
+ * @param {string} filename
  */
-export async function getGeneratedFile(fileId) {
-  const res = await fetch(`${BASE_URL}${ROUTES.file(fileId)}`);
-  return handleResponse(res);
+export function getFileDownloadUrl(filename) {
+  return `${BASE_URL}${ROUTES.file(filename)}`;
 }

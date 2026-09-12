@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from .config import HOST, PORT, OUTPUTS_DIR, MOCK_INGESTION
 from .models import AgentQueryRequest, AgentQueryResponse, HealthResponse
 from .agent.orchestrator import AgentOrchestrator
-from .agent.llm_client import OllamaClient
+from .agent.llm_client import GroqClient
 
 # Configure logging
 logging.basicConfig(
@@ -32,9 +32,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize agent orchestrator and Ollama client
+# Initialize agent orchestrator and Groq LLM client
 orchestrator = AgentOrchestrator()
-ollama_client = OllamaClient()
+llm_client = GroqClient()
 
 @app.get("/", summary="Root index")
 def index():
@@ -52,10 +52,10 @@ def index():
 
 @app.get("/health", response_model=HealthResponse, summary="System Health & Integration Status")
 def health_check():
-    ollama_ok = ollama_client.is_available()
+    groq_ok = llm_client.is_available()
     return HealthResponse(
         status="healthy",
-        ollama_connected=ollama_ok,
+        groq_connected=groq_ok,
         mock_ingestion=MOCK_INGESTION,
         service="Sovereign Backend / Agent (Person 1)"
     )

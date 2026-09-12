@@ -13,7 +13,7 @@ This service serves as the central brain and orchestrator of the **Sovereign On-
 - **API Contracts (PRD Section 1.6 Compliant):**
   - `POST /agent/query` → `{ "answer": "...", "tool_trace": [...], "file_url": "..." }`
   - `GET /files/{filename}` → Downloads generated `.docx` / `.xlsx` files
-  - `GET /health` → Service status, Ollama availability, mock ingestion flag
+  - `GET /health` → Service status, Groq API availability, mock ingestion flag
 
 ---
 

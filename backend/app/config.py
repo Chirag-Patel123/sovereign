@@ -17,11 +17,11 @@ INGESTION_SERVICE_URL = os.getenv("INGESTION_SERVICE_URL", "http://localhost:800
 # In Hour 2-8, default to True so P1 works without P2 being up yet
 MOCK_INGESTION = os.getenv("MOCK_INGESTION", "true").lower() in ("1", "true", "yes")
 
-# Ollama local LLM settings
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-# Default model: small/fast model preferred on CPU, fallback to llama2:latest
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:latest")
-OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "45"))
+# Groq API settings (replaces local Ollama — see llm_client.py note:
+# this makes the service NOT air-gapped, breaks PRD NFR1)
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+GROQ_TIMEOUT = int(os.getenv("GROQ_TIMEOUT", "45"))
 
 # Base URL used for downloadable generated files
 BASE_FILE_URL = os.getenv("BASE_FILE_URL", f"http://localhost:{PORT}/files")

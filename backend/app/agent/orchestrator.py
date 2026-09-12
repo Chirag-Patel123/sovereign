@@ -1,7 +1,7 @@
 import logging
 from typing import Dict, Any, List, Optional
 
-from .llm_client import OllamaClient
+from .llm_client import GroqClient
 from .prompt import SYSTEM_PROMPT
 from ..config import ENABLE_DEMO_DETERMINISTIC_PATH
 from ..models import AgentQueryResponse, ToolTraceItem
@@ -20,7 +20,7 @@ class AgentOrchestrator:
         self.search_tool = SearchTool()
         self.calculate_tool = CalculateTool()
         self.file_tool = WriteFileTool()
-        self.llm_client = OllamaClient()
+        self.llm_client = GroqClient()
 
     def run(self, doc_id: str, query: str) -> AgentQueryResponse:
         """Execute multi-step agent workflow."""
@@ -107,7 +107,7 @@ class AgentOrchestrator:
 
         answer_text = None
 
-        # Attempt synthesis with local Ollama if reachable
+        # Attempt synthesis via Groq API if configured/reachable
         if self.llm_client.is_available():
             prompt = (
                 f"User Query: {query}\n\n"
